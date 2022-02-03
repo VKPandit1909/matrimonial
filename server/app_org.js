@@ -19,6 +19,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 require("./Matrimonial");
 const User = mongoose.model("MatrimonialUsers");
+require("./AdminDetails");
+const admin = mongoose.model("AdminSchema");
 
 const mongoUri =
   "mongodb+srv://Vikram_7_7:m9cQlhNaEeDjQmg2@cluster0.7xb5m.mongodb.net/myFirstDatabase?retryWrites=true&w=majority";
@@ -56,14 +58,12 @@ app.post("/login", async (req, res) => {
       },
       JWT_SECRET
     );
-    if (parseInt(user.status)) {
-      return res.json({ status: "ok", data: token });
-    } else {
-      return res.json({
-        status: "warning",
-        data: { userStatus: user.status, userType: user.type },
-      });
-    }
+    const userid = user.id;
+    User.findOne({ _id: userid }).then((data) => {
+      return res.json({ status: "hlo", data: data });
+    });
+
+    return res.json({ status: "ok", data: token });
   }
   res.json({ status: "error", error: "Invalid mobile/password" });
 });
@@ -74,7 +74,7 @@ app.post("/change-password", async (req, res) => {
     const user = jwt.verify(token, JWT_SECRET);
     const _id = user.id;
     const userData = await User.findOne({ _id }).lean();
-    // if (await bcrypt.compare(prevpass, userData.password)) {
+    if (await bcrypt.compare(prevpass, userData.password)) {
       const password = await bcrypt.hash(plainTextPassword, 10);
       await User.updateOne(
         {
@@ -87,7 +87,9 @@ app.post("/change-password", async (req, res) => {
         }
       );
       res.json({ status: "ok", data: "Password Updated" });
-
+    } else {
+      res.json({ status: "error", error: "Invalid Password" });
+    }
   } catch (error) {
     res.json({ status: "error", error: error });
   }
@@ -95,24 +97,13 @@ app.post("/change-password", async (req, res) => {
 });
 // Forgot Password
 app.post("/forgot-password", async (req, res) => {
-  const { mobile, plainTextPassword } = req.body;
+  const { mobile } = req.body;
   try {
-    const userData = await User.findOne({ mobile }).lean();
-    if (!userData) {
+    const user = await User.findOne({ mobile }).lean();
+    if (!user) {
       return res.json({ status: "error", error: "Invalid mobile" });
     }
-    const password = await bcrypt.hash(plainTextPassword, 10);
-    await User.updateOne(
-      {
-        _id: userData._id,
-      },
-      {
-        $set: {
-          password: password,
-        },
-      }
-    );
-    res.json({ status: "ok", data: "Password Updated" });
+    res.json({ status: "ok", data: "Mobile found" });
   } catch (error) {
     res.json({ status: "error", error: error });
   }
@@ -122,14 +113,12 @@ app.post("/forgot-password", async (req, res) => {
 app.post("/register", async (req, res) => {
   console.log(req.body, "ad");
   const regDate = new Date().toLocaleString();
-  const jathagamId = Math.floor(Math.random() * Date.now());
   const {
     name,
     gender,
     caste,
     email,
     mobile,
-    registeredBy,
     password: plainTextPassword,
   } = req.body;
   const password = await bcrypt.hash(plainTextPassword, 10);
@@ -157,9 +146,7 @@ app.post("/register", async (req, res) => {
       mobile,
       password,
       regDate,
-      jathagamId,
       regNumber,
-      registeredBy,
     });
   } catch (error) {
     console.log(error);
@@ -197,6 +184,31 @@ app.post("/set-details", (req, res) => {
     res.json({ status: "error", error: error });
   }
 });
+app.post("/set-address", (req, res) => {
+  const { fields, token } = req.body;
+  try {
+    console.log(fields);
+    const user = jwt.verify(token, JWT_SECRET);
+    const userid = user.id;
+
+    AdminUser.updateOne(
+      {
+        _id: userid,
+      },
+      {
+        $set: fields,
+      },
+      { overwrite: false, new: true },
+      function (err, res) {
+        console.log(err, res);
+      }
+    );
+    return res.json({ status: "ok", data: "Updated Admin" });
+  } catch (error) {
+    console.log(error);
+    res.json({ status: "error", error: error });
+  }
+});
 
 // User Details
 app.post("/user-details", (req, res) => {
@@ -206,6 +218,20 @@ app.post("/user-details", (req, res) => {
     const userid = user.id;
     console.log(userid);
     User.findOne({ _id: userid })
+      .then((data) => {
+        return res.json({ status: "ok", data: data });
+      })
+      .catch((err) => {
+        return res.json({ status: "error", error: err });
+      });
+  } catch (error) {
+    console.log(error);
+    res.json({ status: "error", error: error });
+  }
+});
+app.post("/admin-details", (req, res) => {
+  try {
+    User.findOne({ _id: "618120e74c1c810b0cff1a2c" })
       .then((data) => {
         return res.json({ status: "ok", data: data });
       })
@@ -391,61 +417,6 @@ app.post("/interest-user", (req, res) => {
 require("./AdminDetails");
 const AdminUser = mongoose.model("AdminDetails");
 
-// Set Address on jagatham PDF
-app.post("/set-address", (req, res) => {
-  const { fields, token } = req.body;
-  try {
-    console.log(fields);
-    const user = jwt.verify(token, JWT_SECRET);
-    const userid = user.id;
-
-    AdminUser.updateOne(
-      {
-        _id: userid,
-      },
-      {
-        $set: fields,
-      },
-      { overwrite: false, new: true },
-      function (err, res) {
-        console.log(err, res);
-      }
-    );
-    return res.json({ status: "ok", data: "Updated Admin" });
-  } catch (error) {
-    console.log(error);
-    res.json({ status: "error", error: error });
-  }
-});
-
-// Getting the admin details
-app.post("/admin-details", (req, res) => {
-  try {
-    User.findOne({ _id: "6120d7942009d11c4c64eb79" })
-      .then((data) => {
-        return res.json({ status: "ok", data: data });
-      })
-      .catch((err) => {
-        return res.json({ status: "error", error: err });
-      });
-  } catch (error) {
-    console.log(error);
-    res.json({ status: "error", error: error });
-  }
-});
-
-// Getting the single admin detail
-app.post("/single-admin-detail", (req, res) => {
-  const userid = req.body.userid;
-  AdminUser.find({ _id: "6120d7942009d11c4c64eb79" })
-    .then((data) => {
-      res.json({ status: "ok", data: data });
-    })
-    .catch((err) => {
-      res.json({ status: "ok", error: err });
-    });
-});
-
 // Admin Login
 app.post("/admin-login", async (req, res) => {
   const { username, password } = req.body;
@@ -548,16 +519,18 @@ app.post("/interest-users-details", (req, res) => {
 
 // Getting Single User Details in Admin Panel
 app.post("/single-users-details", (req, res) => {
-  let findObj;
-  if ("jathagamId" in req.body) {
-    const jathagamId = req.body.jathagamId;
-    findObj = { jathagamId: jathagamId };
-  } else {
-    const userid = req.body.userid;
-    findObj = { _id: userid };
-  }
-
-  User.find(findObj)
+  const userid = req.body.userid;
+  User.find({ _id: userid })
+    .then((data) => {
+      res.json({ status: "ok", data: data });
+    })
+    .catch((err) => {
+      res.json({ status: "ok", error: err });
+    });
+});
+app.post("/single-admin-detail", (req, res) => {
+  const userid = req.body.userid;
+  AdminUser.find({ _id: "618120e74c1c810b0cff1a2c" })
     .then((data) => {
       res.json({ status: "ok", data: data });
     })
@@ -568,34 +541,24 @@ app.post("/single-users-details", (req, res) => {
 
 // Updating Users status in Admin Panel
 app.post("/update-user-status", (req, res) => {
-  const { userid, status } = req.body;
-  User.updateOne(
-    {
-      _id: userid,
-    },
-    {
-      $set: {
-        status: status,
-      },
-    },
-    { overwrite: false, new: true },
-    function (err, res) {
-      console.log(err, res);
-    }
-  );
-  return res.json({ status: "ok", data: "Updated" });
-});
-
-// Updating Users Type in Admin Panel
-app.post("/update-user-type", (req, res) => {
   const { userid, type } = req.body;
+  var ustatus = "";
+  var utype = "";
+  if (type == "paid") {
+    utype = "paid";
+    ustatus = "1";
+  } else {
+    utype = "free";
+    ustatus = "0";
+  }
   User.updateOne(
     {
       _id: userid,
     },
     {
       $set: {
-        type: type,
+        type: utype,
+        status: ustatus,
       },
     },
     { overwrite: false, new: true },
@@ -642,20 +605,13 @@ app.post("/manipulate", (req, res) => {
 
 // Connecting to Node JS
 app.get("/", (req, res) => {
-  // User.find({}).sort({_id:-1}).limit(1)
-  // .then((data) => {
-  //   console.log(data[0]['regDate']);
-  //   res.send(data);
-  //   if(data[0]['regNumber']) {
-  //     const regNumber = parseInt(data[0]['regNumber']) + 1;
-  //   } else {
-  //     const regNumber = 1;
-  //   }
-  // })
-  // .catch((err) => {
-  //   console.log(err);
-  // });
-  res.send("Welcome to Node JS.");
+  User.find({})
+    .then((data) => {
+      res.send(data);
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 });
 
 app.listen(PORT, () => {
